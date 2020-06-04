@@ -1,49 +1,49 @@
 .MODEL small
 .STACK 100h
 .DATA
-
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;MESSAGES
 	instructionsMessage db "W - rotate, A - move left, D - move right, S - speed up falling", 0Ah, 0Dh, "ENTER ANY KEY$"
 	lostMessage db "YOU LOST$"
 	scoreMessage db "SCORE: $"
 	creditsMessage db "MADE BY SP00NYMAN$"
-	
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CONSTANTS
     FIELD_WIDTH equ 10
 	FIELD_HEIGHT equ 20
 	
 	;1 byte - ASCII code
-	;2 byte - symbol's attribute (blinking(7b), BG color(6-4b), bright(3b), symbol color(2-0б)
+	;2 byte - symbol's attribute (blinking(7b), BG color(6-4b), bright(3b), symbol color(2-0Ã¡)
 
-	FIGURE_ASCII equ '*'
-	FIGURE_ATTRIBUTE equ 5Bh
+	FIGURE_ASCII equ ' '
+	FIGURE_ATTRIBUTE equ 49h
 
-	FIELD_BG equ 61h
-	FIELD_ASCII_BG equ 'O'
-	FIELD_ASCII_FIGURE equ  '*'
-	FIELD_BG_FIGURE equ 00101001b
+	FIELD_BG equ 71h
+	FIELD_ASCII_BG equ ' '
+	FIELD_ASCII_FIGURE equ  ' '
+	FIELD_BG_FIGURE equ 00011001b
 
-	BASIC_DELAY equ 0010h
+	BASIC_DELAY equ 0008h
 	SHORT_DELAY equ 0003h
-	
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;TIMER
 	lastTimer dw 0
 	delay dw BASIC_DELAY
 	score dw 0
 	numberBuffer db 8 DUP('$')
 
-	figure	db 0, 0 
+	figure	db 0, 0 ;X, Y
 			db 0, 0
 			db 0, 0
 			db 0, 0
-	figure_buffer	db 0, 0 
+	figure_buffer	db 0, 0 ;X, Y
 					db 0, 0
 					db 0, 0
 					db 0, 0
-	rotate db 0 
-	xOffset dw 0 
+	rotate db 0 ;BOOL rotate
+	xOffset dw 0 ;Offset on X axis
 
 	buffer db 0
-	field db 200 DUP(0) 
+	field db 200 DUP(0) ;FIELD 20X10
 
-	
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;SHAPES
 	L_SHAPE_RIGHT db 2, 3, 5, 7
 	L_SHAPE_LEFT  db 3, 5, 7, 6
 	Z_SHAPE db 2, 4, 5, 7
@@ -68,7 +68,7 @@ check macro
 		cmp figure[si + 1], FIELD_HEIGHT
 		jge returnZero
 
-
+		;;;;;Collistion detection
 		xor ax, ax
 		mov al, figure[si + 1]
 		push cx
@@ -79,7 +79,7 @@ check macro
 		mov di, ax     
         cmp field[di], 0
 		jne returnZero
-		
+		;;;;
 
         add si, 2
     loop figureLoop
@@ -91,7 +91,8 @@ check macro
     pop ax
     pop si
     pop cx
-    endm
+endm
+
 generateFigure macro
     local figureLoop
     push cx
@@ -101,7 +102,7 @@ generateFigure macro
     push di
 
     mov ah, 00h
-    int 1Ah 
+    int 1Ah ;DX now hold number of clock ticks since midnight
     mov ax, dx
     xor dx, dx
     mov cx, 7
@@ -114,7 +115,7 @@ generateFigure macro
     mov ax, di
     mul cx
     mov di, ax
-    add di, offset L_SHAPE_RIGHT 
+    add di, offset L_SHAPE_RIGHT ; DI now contains figure's address
 
     figureLoop:
         mov al, [di]
@@ -124,7 +125,7 @@ generateFigure macro
         pop cx
 
         mov figure[si], dl ;DL is % 2
-        mov figure[si + 1], al 
+        mov figure[si + 1], al ; AL is (int) / 2
 
         add si, 2
         inc di
@@ -135,8 +136,9 @@ generateFigure macro
     pop dx
     pop ax
     pop cx
-    endm
-toString proc 
+endm
+
+toString proc ;SI points to number
     push ax
     push cx
     push di
@@ -162,7 +164,8 @@ toString proc
     pop cx
     pop ax
     ret
-    toString endp
+toString endp
+
 reverse proc
     push ax
     push di
@@ -191,7 +194,8 @@ reverse proc
     pop di
     pop ax
     ret
-    reverse endp
+reverse endp
+
 addOnField macro 
 	local figureLoop
 	push cx
@@ -222,7 +226,8 @@ addOnField macro
 	pop dx
 	pop ax
 	pop cx
-	endm
+endm
+
 checkLines macro 
 	local rowLoop, colLoop, rowLoopEnd, rowElimLoop, pointLoop
 	push bx
@@ -253,7 +258,7 @@ checkLines macro
 		mov cx, FIELD_HEIGHT - 2
 		rowElimLoop:
 			push cx
-		
+			;bx = 47, 41, 35, 29, 23, 17, 11
 			mov cx, FIELD_WIDTH
 			pointLoop:
 				inc bx
@@ -263,14 +268,14 @@ checkLines macro
 
 			sub bx, FIELD_WIDTH
 			sub bx, FIELD_WIDTH
-		
+			;bx = 41, 35, 29, 23, 17, 11, 5
 			pop cx
 		loop rowElimLoop
 		add si, FIELD_WIDTH
 		mov ax, score
-		add ax, 100
+		add ax, 1
 		mov score, ax
-
+        call checkScore_in_game
 		rowLoopEnd:
 		sub si, FIELD_WIDTH
 		pop cx
@@ -280,13 +285,15 @@ checkLines macro
 	pop si
 	pop ax
 	pop bx
-	endm
+endm
+
 clearScreen macro
     push ax
     mov ax, 03h
     int 10h
     pop ax
-    endm
+endm
+
 drawFigure macro
 	local figureLoop
 	push cx
@@ -325,7 +332,8 @@ drawFigure macro
 	pop dx
 	pop ax
 	pop cx
-	endm
+endm
+
 drawField macro
 	local fieldLoopH, fieldLoopW, next, nothing
 	push cx
@@ -333,7 +341,9 @@ drawField macro
 	push si
 	push di
 	push es
-
+    
+    call checkScore_in_game
+    
 	mov ax, 0B800h
 	mov es, ax
 
@@ -372,7 +382,8 @@ drawField macro
 	pop si
 	pop ax
 	pop cx
-	endm
+endm
+
 isLost macro
 	local isLostLoop, lost, finish
 	push cx
@@ -397,7 +408,8 @@ isLost macro
 	pop si
 	pop ax
 	pop cx
-	endm
+endm
+
 saveFigure macro
 	push si
 	push di
@@ -413,7 +425,8 @@ saveFigure macro
 	pop cx
 	pop di
 	pop si
-	endm
+endm
+
 loadFigure macro
 	push si
 	push di
@@ -429,7 +442,7 @@ loadFigure macro
 	pop cx
 	pop di
 	pop si
-	endm
+endm
 
 rotateFigure macro
 	local figureLoop
@@ -442,24 +455,24 @@ rotateFigure macro
 		je finish
 
 		saveFigure
-		lea di, figure 
+		lea di, figure ;Center of rotation
 		add di, 2
 
 		mov cx, 4
 		xor si, si
 		figureLoop:
-			mov al, figure[si + 1]	
+			mov al, figure[si + 1]	;xOffset
 			sub al, [di + 1]
-			mov dl, figure[si]	
+			mov dl, figure[si]	;yOffset
 			sub dl, [di]
 
 			mov bl, [di]
 			add bl, al
-			mov figure[si], bl	
+			mov figure[si], bl	;new X
 
 			mov bl, [di + 1]
 			sub bl, dl
-			mov figure[si + 1], bl	
+			mov figure[si + 1], bl	;new Y
 
 			add si, 2
 		loop figureLoop
@@ -475,7 +488,8 @@ rotateFigure macro
 	pop si
 	pop ax 
 	pop cx
-	endm
+endm
+
 moveDown macro
 	local figureLoop, finish
 	push cx
@@ -490,7 +504,8 @@ moveDown macro
 	finish:
 	pop si
 	pop cx
-	endm
+endm
+
 moveSide macro
 	local figureLoop, finish
 	push cx
@@ -520,7 +535,8 @@ moveSide macro
 	pop ax
 	pop si
 	pop cx
-	endm
+endm
+
 input macro
 	local notPressedAnyKey, a, d, s, clearBuffer
 	push ax
@@ -563,7 +579,8 @@ input macro
 	notPressedAnyKey:
 	pop dx
 	pop ax
-	endm
+endm
+
 isDelayPassed macro
 	push dx
 	push cx
@@ -574,7 +591,8 @@ isDelayPassed macro
 		cmp dx, delay
 	pop cx
 	pop dx
-	endm
+endm
+
 printStr macro string
     push dx
     push ax
@@ -583,7 +601,8 @@ printStr macro string
     int 21h
     pop ax
     pop dx
-    endm
+endm
+
 printLn macro
     push dx
     push ax
@@ -596,7 +615,125 @@ printLn macro
         int 21h
     pop ax
     pop dx
-    endm
+endm  
+
+print_Score PROC 
+    push ax
+    push es
+    push si
+    mov ax,0b800h
+    mov es, ax
+    mov si,1162;adress of "Score: "
+    mov es:[si],'S' 
+    mov es:[si+2],'c'
+    mov es:[si+4],'o'
+    mov es:[si+6],'r'
+    mov es:[si+8],'e'
+    mov es:[si+10],':'
+    mov es:[si+12],' '
+    pop si
+    pop es
+    pop ax
+    ret
+print_Score ENDP
+
+checkScore_in_game proc  
+    push si
+    push ax
+    push cx
+    push bx
+    push dx
+    push es
+
+    mov ax, 0b800h
+    mov es, ax
+
+    mov si, 1176 ;nuli powli
+    inc si
+    inc si   
+    xor ax,ax
+    mov ax, score
+
+    mov cx,4
+    mov bx,1000
+    scoreLoop:
+    xor dx,dx
+    div bx
+    add al,'0'   
+    mov es:[si], al  
+    mov ax,dx
+
+    push ax
+	
+    mov ax,bx
+    mov bx,10
+    xor dx,dx
+    div bx
+    mov bx,ax
+
+    pop ax
+
+    inc si
+    inc si
+    loop scoreLoop
+
+    pop es
+    pop dx
+    pop bx
+    pop cx
+    pop ax
+    pop si
+    ret
+checkScore_in_game endp
+
+print_res_score PROC
+     push si
+    push ax
+    push cx
+    push bx
+    push dx
+    push es
+
+    mov ax, 0b800h
+    mov es, ax
+
+    mov si, 176 ;nuli powli
+    inc si
+    inc si   
+    xor ax,ax
+    mov ax, score
+
+    mov cx,4
+    mov bx,1000
+    scoreLoop2:
+    xor dx,dx
+    div bx
+    add al,'0'   
+    mov es:[si], al  
+    mov ax,dx
+
+    push ax
+	
+    mov ax,bx
+    mov bx,10
+    xor dx,dx
+    div bx
+    mov bx,ax
+
+    pop ax
+
+    inc si
+    inc si
+    loop scoreLoop
+
+    pop es
+    pop dx
+    pop bx
+    pop cx
+    pop ax
+    pop si
+    ret
+print_res_score ENDP
 main:
 	mov ax, @DATA
 	mov ds, ax
@@ -607,11 +744,11 @@ main:
 	int 21h
 	clearScreen
     generateFigure
-	while:
+    call print_Score
+	while1:
 		isDelayPassed
 		jb skip
 
-	
 		mov delay, BASIC_DELAY
 		input
 
@@ -634,20 +771,18 @@ main:
 		mov lastTimer, ax
 		mov xOffset, 0
 		mov rotate, 0
-	
+		;;;;;;;;;;;;;;;;END_TICK
+
 		skip:
 		xor cx, cx
-	loop while
+	loop while1
 	lost:
 	clearScreen
 	printStr lostMessage
 	printLn
 	printStr scoreMessage
-	lea si, score
-	call toString
-	printStr numberBuffer
-	printLn
-	printStr creditsMessage
-	
+	call print_res_score
+	mov ax, 4c00h
+	int 21h
 	int 20h
 end main
